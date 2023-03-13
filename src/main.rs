@@ -1,11 +1,23 @@
 use clap::{Parser, Subcommand};
-use config::Config;
+use serde::{Deserialize, Serialize};
 
-use crate::{local::list_local_repos, remote::github};
+use crate::{
+    config::Config,
+    local::list_local_repos,
+    remote::github,
+};
 
 mod config;
 mod local;
 mod remote;
+
+
+#[derive(Debug, Serialize, Deserialize)]
+struct GithubOrg {
+    id: i32,
+    login: String,
+    description: String,
+}
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -30,9 +42,12 @@ enum Commands {
     },
     /// status summary of all potential local auth info
     Auth {},
+    /// list of users and orgs remote has access to
+    Orgs {},
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let cli = Cli::parse();
 
     let default_root_folder = "~/repos";
@@ -70,8 +85,36 @@ fn main() {
             };
             println!("  github token: {}", github_token_string)
         }
+        Some(Commands::Orgs { .. }) => {
+            if let Ok(token) = github::get_token() {
+                match html_test(&token).await {
+                    Ok(res) => {
+                        eprintln!("DEBUGPRINT[1]: main.rs:79: res={:?}", res);
+                    }
+                    Err(err) => {
+                        eprintln!("DEBUGPRINT[4]: main.rs:82: err={:?}", err);
+                    }
+                };
+            };
+        }
         None => {
             println!("no command given (help?)");
         }
-    }
+    };
+}
+
+async fn html_test(token: &str) -> Result<Vec<GithubOrg>, reqwest::Error> {
+    let client = reqwest::Client::new();
+    let req = client
+        .get("https://api.github.com/user/orgs")
+        .header("Accept", "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28")
+        .header("Authorization", format!("Bearer {token}"))
+        .header("User-agent", "repos-cli/v0.1.0");
+
+    let res = req.send().await?;
+
+    let res: Vec<GithubOrg> = res.json().await?;
+
+    Ok(res)
 }
