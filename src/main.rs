@@ -1,10 +1,11 @@
 use clap::{Parser, Subcommand};
 use config::Config;
 
-use crate::local::list_local_repos;
+use crate::{local::list_local_repos, remote::github};
 
 mod config;
 mod local;
+mod remote;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -27,6 +28,8 @@ enum Commands {
         #[arg(short, long)]
         all: bool,
     },
+    /// status summary of all potential local auth info
+    Auth {},
 }
 
 fn main() {
@@ -55,6 +58,17 @@ fn main() {
             } else {
                 println!("with no flag");
             }
+        }
+        Some(Commands::Auth { .. }) => {
+            println!("\nSummary of auth infomation:");
+            let github_token_string = match github::get_token() {
+                Ok(mut token) => {
+                    token.replace_range(8.., &"*".repeat(token.len() - 8));
+                    format!("☑ {}", token)
+                }
+                Err(..) => format!("☒ could not get github token from gh cli"),
+            };
+            println!("  github token: {}", github_token_string)
         }
         None => {
             println!("no command given (help?)");
