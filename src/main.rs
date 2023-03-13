@@ -1,4 +1,10 @@
 use clap::{Parser, Subcommand};
+use config::Config;
+
+use crate::local::list_local_repos;
+
+mod config;
+mod local;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -26,15 +32,26 @@ enum Commands {
 fn main() {
     let cli = Cli::parse();
 
+    let default_root_folder = "~/repos";
+
+    let config = Config {
+        // TODO read from config file and parse it to a Path early
+        root_folder: shellexpand::full(default_root_folder).unwrap().to_string(),
+    };
+
     match &cli.command {
-        Some(Commands::List { all, local, remote }) => {
+        Some(Commands::List {
+            all: _,
+            local,
+            remote,
+        }) => {
             println!("listing command");
             if *local {
+                let local_repos = list_local_repos(&config).unwrap();
                 println!("with local flag");
+                eprintln!("DEBUGPRINT[1]: main.rs:43: local_repos={:?}", local_repos);
             } else if *remote {
                 println!("with remote flag");
-            } else if *all {
-                println!("with all flag");
             } else {
                 println!("with no flag");
             }
