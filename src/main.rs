@@ -1,23 +1,10 @@
 use clap::{Parser, Subcommand};
-use serde::{Deserialize, Serialize};
 
-use crate::{
-    config::Config,
-    local::list_local_repos,
-    remote::github,
-};
+use crate::{config::Config, local::list_local_repos, remote::github};
 
 mod config;
 mod local;
 mod remote;
-
-
-#[derive(Debug, Serialize, Deserialize)]
-struct GithubOrg {
-    id: i32,
-    login: String,
-    description: String,
-}
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -71,30 +58,32 @@ async fn main() {
             } else if *remote {
                 println!("with remote flag");
             } else {
-                println!("with no flag");
+                println!("with --all or no flag");
             }
         }
+
         Some(Commands::Auth { .. }) => {
             println!("\nSummary of auth infomation:");
-            let github_token_string = match github::get_token() {
+            match github::get_token() {
                 Ok(mut token) => {
                     token.replace_range(8.., &"*".repeat(token.len() - 8));
-                    format!("☑ {}", token)
+                    println!("  - ☑ github token: {}", token);
                 }
-                Err(..) => format!("☒ could not get github token from gh cli"),
+                Err(..) => println!("  - ☒ could not get github token from gh cli"),
             };
-            println!("  github token: {}", github_token_string)
         }
+
         Some(Commands::Orgs { .. }) => {
-            if let Ok(token) = github::get_token() {
-                match html_test(&token).await {
-                    Ok(res) => {
-                        eprintln!("DEBUGPRINT[1]: main.rs:79: res={:?}", res);
-                    }
-                    Err(err) => {
-                        eprintln!("DEBUGPRINT[4]: main.rs:82: err={:?}", err);
-                    }
-                };
+            match github::get_token() {
+                Ok(token) => {
+                    match github::fetch_orgs(&token).await {
+                        Ok(res) => println!("success with orgs={:?}", res),
+                        Err(err) => println!("failed with err={:?}", err),
+                    };
+                }
+                Err(..) => {
+                    println!("no valid github token")
+                }
             };
         }
         None => {
@@ -103,18 +92,3 @@ async fn main() {
     };
 }
 
-async fn html_test(token: &str) -> Result<Vec<GithubOrg>, reqwest::Error> {
-    let client = reqwest::Client::new();
-    let req = client
-        .get("https://api.github.com/user/orgs")
-        .header("Accept", "application/vnd.github+json")
-        .header("X-GitHub-Api-Version", "2022-11-28")
-        .header("Authorization", format!("Bearer {token}"))
-        .header("User-agent", "repos-cli/v0.1.0");
-
-    let res = req.send().await?;
-
-    let res: Vec<GithubOrg> = res.json().await?;
-
-    Ok(res)
-}
